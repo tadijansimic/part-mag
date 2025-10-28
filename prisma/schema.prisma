@@ -1,0 +1,18 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model electronicComponent {
+  id          Int     @id @default(autoincrement())
+  mpn         String
+  description String
+  count       Int     @default(0)
+  packaging   String?
+  datasheet   String?
+  place       String
+}
