@@ -1,3 +1,4 @@
+"use client";
 import { useState, useEffect, forwardRef, useImperativeHandle, useRef } from "react";
 
 type ValidatorFn = (val: string) => boolean;
@@ -9,6 +10,8 @@ interface ValidatedInputProps {
     onChange?: (value: string, isValid: boolean) => void;
     initialValue?: string;
     disabled?: boolean;
+    tabIndex?: number;
+    onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
 
 export interface ValidatedInputRef {
@@ -25,41 +28,34 @@ const ValidatedInput = forwardRef<ValidatedInputRef, ValidatedInputProps>(({
     onChange,
     initialValue = "",
     disabled = false,
-    ...props
+    tabIndex = 0,
+    onKeyDown,
 }, ref) => {
     const [value, setValue] = useState(initialValue);
     const [error, setError] = useState(false);
-    const [touched, setTouched] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
-    const validate = (): boolean => {
-        setTouched(true);
-        const valid = validator.every(fn => fn(value));
+
+    const validate = (val: string = value): boolean => {
+        const valid = validator.every(fn => fn(val));
         setError(!valid);
-        if (onChange) onChange(value, valid);
+        if (onChange) onChange(val, valid);
         return valid;
     };
 
     useImperativeHandle(ref, () => ({
         validate,
         getValue: () => value,
-        focus: () => {
-            inputRef.current?.focus();
-        },
+        focus: () => inputRef.current?.focus(),
         reset: () => {
             setValue("");
             setError(false);
-            setTouched(false);
         }
     }));
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setValue(e.target.value);
-        if (touched) validate();
-    };
-
-    const handleBlur = () => {
-        setTouched(true);
-        validate();
+        const val = e.target.value;
+        setValue(val);
+        validate(val);
     };
 
     useEffect(() => {
@@ -71,22 +67,23 @@ const ValidatedInput = forwardRef<ValidatedInputRef, ValidatedInputProps>(({
             <input
                 type="text"
                 ref={inputRef}
-                value={value ? value : ''}
+                value={value}
                 onChange={handleChange}
-                onBlur={handleBlur}
+                onKeyDown={onKeyDown}
                 placeholder={placeholder}
+                tabIndex={tabIndex}
                 disabled={disabled}
-                style={{ borderColor: error ? '#f87171' : '#393E46' }}
                 className={`
-                    px-3 py-2 rounded-md border border-primary bg-bg-input text-foreground
-                    focus:outline-none
-                    focus:border-[#888888]!
+                    px-3 py-2 rounded-md border-2
+                    ${error ? "border-[#ef4444]" : "border-primary"}
+                    bg-background text-foreground
+                    focus:outline-none focus:border-foreground/30
                     transition-colors duration-200
                 `}
-                {...props}
             />
         </div>
     );
 });
 
+ValidatedInput.displayName = "ValidatedInput";
 export default ValidatedInput;

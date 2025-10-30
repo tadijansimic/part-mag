@@ -7,12 +7,47 @@ const prisma = new PrismaClient();
 
 export async function GET(req: NextRequest) {
     const url = new URL(req.url);
-    const searchParams = url.searchParams.getAll('search');
+    const queries = url.searchParams.getAll("query").filter(q => q.trim() !== "");
 
-    const parts = await (prisma as any).electronicComponent.findMany({}) as ElectronicComponent[];
+    let parts: ElectronicComponent[] = [];
 
-    return NextResponse.json({ message: 'GET all parts', searchParams, parts });
+    if (queries.length === 0) {
+        parts = await prisma.electronicComponent.findMany() as ElectronicComponent[];
+    } else {
+        // Napravi niz svih mogućih uslova
+        const orConditions = queries.flatMap((q) => [
+            { mpn: { contains: q } },
+            { description: { contains: q } },
+            { packaging: { contains: q } },
+            { place: { contains: q } },
+        ]);
+
+        // Ručno filtriranje na nivou JavaScript-a, da bi bilo case-insensitive
+        const allParts = await prisma.electronicComponent.findMany() as ElectronicComponent[];
+
+        const lowerQueries = queries.map(q => q.toLowerCase());
+
+        parts = allParts.filter(part =>
+            lowerQueries.some(q =>
+                (part.mpn?.toLowerCase().includes(q) ?? false) ||
+                (part.description?.toLowerCase().includes(q) ?? false) ||
+                (part.packaging?.toLowerCase().includes(q) ?? false) ||
+                (part.place?.toLowerCase().includes(q) ?? false)
+            )
+        ).sort((a, b) => {
+            const getKey = (p: typeof allParts[0]) =>
+                p.mpn || p.description || p.packaging || p.place || "";
+
+            return getKey(a).localeCompare(getKey(b));
+        });
+    }
+
+    return NextResponse.json({ message: "GET filtered parts", queries, parts });
 }
+
+
+
+
 
 export async function POST(req: NextRequest) {
     const body = await req.json();
