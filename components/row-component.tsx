@@ -14,37 +14,53 @@ interface Props {
     comp: ElectronicComponent,
     expanded: boolean,
     setExpanded?: (id: number) => Promise<void> | void,
-    update?: () => void | Promise<void>,
+    update?: (updatedComp: ElectronicComponent) => void | Promise<void>;
     onDelete?: () => void,
+    q: string,
+    exact: string;
 }
 
-async function updateComponent(updatedComp: ElectronicComponent, update?: () => void, setToast?: (toast: ToastInfo | null) => void) {
-    const res = await fetch("/api/part", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updatedComp),
-    });
-
-    const data = await res.json();
-    if (await res.ok) {
-        setToast?.({
-            open: true,
-            message: "Component updated successfully",
-            severity: "success",
+async function updateComponent(
+    updatedComp: ElectronicComponent,
+    q: string,
+    update?: (updated: ElectronicComponent) => void,
+    setToast?: (toast: ToastInfo | null) => void
+) {
+    try {
+        const res = await fetch("/api/part", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updatedComp),
         });
-        setTimeout(() => {
-            setToast?.(null);
-        }, 1000);
-    }
-    else {
+
+        const data = await res.json();
+
+        if (res.ok) {
+            setToast?.({
+                open: true,
+                message: "Component updated successfully",
+                severity: "success",
+            });
+            setTimeout(() => setToast?.(null), 1000);
+
+            if (update) update(updatedComp);
+        } else {
+            setToast?.({
+                open: true,
+                message: `Error updating component: ${data.error || "Unknown error"}`,
+                severity: "error",
+            });
+        }
+    } catch (err) {
         setToast?.({
             open: true,
-            message: `Error updating component: ${data.error || "Unknown error"}`,
+            message: `Network error: ${err}`,
             severity: "error",
         });
     }
-    update?.();
 }
+
+
 interface ToastInfo {
     open: boolean;
     message: string;
@@ -52,7 +68,7 @@ interface ToastInfo {
 }
 
 
-export default function RowConponent({ onDelete, comp, className, expanded, setExpanded, update }: Props) {
+export default function RowConponent({ onDelete, comp, className, expanded, setExpanded, update, q, exact = "" }: Props) {
     const inputRefs = [
         useRef<ValidatedInputRef>(null),
         useRef<ValidatedInputRef>(null),
@@ -71,7 +87,7 @@ export default function RowConponent({ onDelete, comp, className, expanded, setE
         }}
     >
         <div ref={fensiDivRef} className={`${className} focus:outline-none focus:bg-bg-hover hover:bg-bg-hover hover:cursor-pointer min-h-[50px] border-t border-primary/30
-        transition-color duration-50 grid grid-rows-1 grid-cols-8 w-full px-2`} onClick={() => { fensiDivRef.current?.blur(); setExpanded?.(comp.id) }}
+        transition-color duration-50 grid grid-rows-1 grid-cols-8 w-full px-2 ${exact == comp.mpn ? "text-green-500!" : ""}`} onClick={() => { fensiDivRef.current?.blur(); setExpanded?.(comp.id) }}
 
             tabIndex={0}>
             <div className="flex items-center col-span-2 col-start-1">
@@ -88,30 +104,24 @@ export default function RowConponent({ onDelete, comp, className, expanded, setE
                 <IconButton
                     onClick={(e) => {
                         e.stopPropagation();
-                        updateComponent({ ...comp, count: Math.max(0, comp.count - 1) }, update);
-                    }}
-                    sx={{
-                        width: 25,
-                        height: 25,
-                        padding: 0,
+                        const newComp = { ...comp, count: Math.max(0, comp.count - 1) };
+                        updateComponent(newComp, q, update); // update je funkcija iz Home
                     }}
                 >
                     <RemoveIcon fontSize="small" className='text-secondary' />
                 </IconButton>
+
                 {comp.count}
                 <IconButton
                     onClick={(e) => {
                         e.stopPropagation();
-                        updateComponent({ ...comp, count: comp.count + 1 }, update);
-                    }}
-                    sx={{
-                        width: 25,
-                        height: 25,
-                        padding: 0,
+                        const newComp = { ...comp, count: comp.count + 1 };
+                        updateComponent(newComp, q, update);
                     }}
                 >
                     <AddIcon fontSize="small" className='text-secondary' />
                 </IconButton>
+
             </div>
             <div className="flex items-center col-start-8 w-full">
                 {comp.place}
@@ -146,7 +156,7 @@ export default function RowConponent({ onDelete, comp, className, expanded, setE
                         }
                     `}
                 >
-                    {comp.datasheet && comp.datasheet.length > 0 ? (
+                    {comp.datasheet && comp.datasheet.length > 0 && comp.datasheet != "" ? (
                         <iframe
                             src={comp.datasheet}
                             tabIndex={-1}
@@ -189,7 +199,6 @@ export default function RowConponent({ onDelete, comp, className, expanded, setE
                         initialValue={comp.packaging ? comp.packaging : ""}
                         ref={inputRefs[2]}
                         validator={[
-                            (val: string) => val.length > 0,
                         ]}
                         onChange={(value, isValid) => {
 
@@ -251,7 +260,7 @@ export default function RowConponent({ onDelete, comp, className, expanded, setE
                             datasheet: comp.datasheet,
                         };
 
-                        updateComponent(updatedComp, update ? update : () => { }, setToast);
+                        updateComponent(updatedComp, q, update ? update : () => { }, setToast);
                     }}>
                         Save
                     </Button>

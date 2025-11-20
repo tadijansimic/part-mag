@@ -66,7 +66,7 @@ export default function AddForm({ mpn, onSubmit }: Props) {
         e.preventDefault();
         const allValid = Object.values(inputRefs).every(ref => ref.current?.validate());
         if (!allValid) {
-            console.log("Form is invalid");
+            // console.log("Form is invalid");
             return;
         }
 
@@ -151,7 +151,6 @@ export default function AddForm({ mpn, onSubmit }: Props) {
                     initialValue={component.packaging}
                     ref={inputRefs.packaging}
                     validator={[
-                        (val: string) => val.length > 0,
                     ]}
                 />
                 <ValidatedInput

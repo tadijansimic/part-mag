@@ -4,9 +4,17 @@ import React, { useState, useEffect, useRef } from "react";
 import RowConponent from "@/components/row-component";
 import ElectronicComponent from "../types/component-type";
 import ValidatedInput, { ValidatedInputRef } from "@/components/input-component";
-import { Button } from "@mui/material";
+import { Button, Checkbox, FormControlLabel } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import AddForm from "@/components/add-form";
+import ArrowUpward from '@mui/icons-material/ArrowUpward';
+import ArrowDownward from '@mui/icons-material/ArrowDownward';
+
+
+interface sortI {
+    key: keyof ElectronicComponent;
+    asc: boolean;
+}
 
 export default function Home() {
     const [components, setComponents] = useState<ElectronicComponent[]>([]);
@@ -18,15 +26,18 @@ export default function Home() {
     const [modalVisible, setModalVisible] = useState(false);
 
     // Fetch parts from API
-    async function fetchParts(q?: string) {
-        const res = await fetch(`/api/part?query=${encodeURIComponent(q || "")}`);
+
+    const fetchParts = async (q?: string, sim: boolean = similar) => {
+        if (!q) q = searchQuery;
+        const res = await fetch(`/api/part?query=${encodeURIComponent(q)}&similar=${sim}`);
         const json = await res.json();
         const parts: ElectronicComponent[] = Array.isArray(json.parts) ? json.parts : [];
-        setComponents(parts);
+        handleSort(sortParams.key, sortParams.asc, parts);
     }
 
+
     useEffect(() => {
-        fetchParts(searchQuery);
+        fetchParts(searchQuery, similar);
     }, [searchQuery]);
 
     // Keyboard shortcuts
@@ -37,6 +48,7 @@ export default function Home() {
                 searchInputRef.current?.focus();
             }
             if (e.key === "Escape" && showAddForm) {
+
                 closeAddForm();
             }
         };
@@ -57,7 +69,7 @@ export default function Home() {
 
     // Modal control
     const openAddForm = async () => {
-        if (components.length === 0) {
+        if (components.length === 0 || components.length > 1) {
             setShowAddForm(true);
             setTimeout(() => setModalVisible(true), 10);
         }
@@ -87,6 +99,7 @@ export default function Home() {
     };
 
     const closeAddForm = () => {
+        searchInputRef.current?.focus();
         setModalVisible(false);
         setTimeout(() => {
             setShowAddForm(false);
@@ -95,12 +108,15 @@ export default function Home() {
     };
 
     const handleAddFormSubmit = async (comp: ElectronicComponent) => {
+        searchInputRef.current?.focus();
         try {
             if (searchQuery.trim() === "") {
                 closeAddForm();
                 return;
             }
             comp.mpn = comp.mpn.toUpperCase();
+            comp.packaging = comp.packaging?.toUpperCase() || "";
+            comp.place = comp.place.toUpperCase();
             const res = await fetch("/api/part", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -119,6 +135,41 @@ export default function Home() {
             closeAddForm();
         }
     };
+    const [similar, setSimilar] = useState<boolean>(false);
+    const [sortParams, setSortParams] = useState<sortI>({
+        key: "mpn",
+        asc: true
+    })
+    const handleSort = (key: keyof ElectronicComponent, asc: boolean, list?: ElectronicComponent[]) => {
+        const source = list ?? components;
+
+        const matching = source.filter(c => c.mpn === searchQuery.toUpperCase());
+        const nonMatching = source.filter(c => c.mpn !== searchQuery.toUpperCase());
+
+        const sortedMatching = [...matching].sort((a, b) => {
+            const aVal = a[key] ?? "";
+            const bVal = b[key] ?? "";
+            if (typeof aVal === "number" && typeof bVal === "number") return asc ? aVal - bVal : bVal - aVal;
+            return asc ? aVal.toString().localeCompare(bVal.toString()) : bVal.toString().localeCompare(aVal.toString());
+        });
+
+        const sortedNonMatching = [...nonMatching].sort((a, b) => {
+            const aVal = a[key] ?? "";
+            const bVal = b[key] ?? "";
+            if (typeof aVal === "number" && typeof bVal === "number") return asc ? aVal - bVal : bVal - aVal;
+            return asc ? aVal.toString().localeCompare(bVal.toString()) : bVal.toString().localeCompare(aVal.toString());
+        });
+
+        const sorted = [...sortedMatching, ...sortedNonMatching];
+        setComponents(sorted);
+
+        setSortParams({ key, asc });
+    };
+
+
+
+
+
 
 
     return (
@@ -126,7 +177,10 @@ export default function Home() {
             {showAddForm && (
                 <div
                     className={`fixed inset-0 flex justify-center items-center bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${modalVisible ? "opacity-100" : "opacity-0"} z-10 `}
-                    onClick={closeAddForm}
+                    onClick={() => {
+                        searchInputRef.current?.focus();
+                        closeAddForm();
+                    }}
                 >
                     <div
                         className="w-1/2"
@@ -160,25 +214,80 @@ export default function Home() {
                         }
                     }}
                     placeholder="Search..."
-                    className="my-2 grow"
+                    className="my-2 mr-4 grow"
                     ref={searchInputRef}
                 />
-                <Button variant="text" className="p-0" type="submit" >
+                <FormControlLabel
+                    control={
+                        <Checkbox
+                            checked={similar}
+                            onChange={() => {
+                                fetchParts(searchQuery, !similar);
+                                setSimilar(!similar);
+                            }}
+                            color="primary"
+                        />
+                    }
+                    label="Similar"
+                />
+                <Button variant="text" className="p-0" type="button" onClick={(e) => {
+                    e.preventDefault();
+                    setShowAddForm(true);
+                    setTimeout(() => setModalVisible(true), 10);
+                }}>
                     <AddIcon className="w-full" />
                 </Button>
             </form>
 
             <div className="flex flex-col m-auto px-2 border-primary border-t border-b w-11/12 max-h-[90vh] overflow-auto text-lg border-collapse">
                 <div className="items-center grid grid-cols-8 grid-rows-1 border-primary border-b w-full min-h-[50px]">
-                    <div className="col-start-1">MPN</div>
-                    <div className="col-start-3">Desc</div>
-                    <div className="col-start-6">Pck</div>
-                    <div className="col-start-7">Qtty</div>
-                    <div className="col-start-8">Place</div>
+
+                    <a className="col-start-1 cursor-pointer" onClick={() => {
+                        handleSort("mpn", sortParams.key == "mpn" ? !sortParams.asc : true);
+                    }}>
+                        <div className="flex items-center">MPN
+                            {sortParams.key == "mpn" && sortParams.asc ? <ArrowUpward className="ml-2" /> : null}
+                            {sortParams.key == "mpn" && !sortParams.asc ? <ArrowDownward className="ml-2" /> : null}
+                        </div>
+                    </a>
+                    <a className="col-start-3 cursor-pointer" onClick={() => {
+                        handleSort("description", sortParams.key == "description" ? !sortParams.asc : true);
+                    }}>
+                        <div className="flex items-center">Desc
+                            {sortParams.key == "description" && sortParams.asc ? <ArrowUpward className="ml-2" /> : null}
+                            {sortParams.key == "description" && !sortParams.asc ? <ArrowDownward className="ml-2" /> : null}
+                        </div>
+                    </a>
+                    <a className="col-start-6 cursor-pointer" onClick={() => {
+                        handleSort("packaging", sortParams.key == "packaging" ? !sortParams.asc : true);
+                    }}>
+                        <div className="flex items-center">Pck
+                            {sortParams.key == "packaging" && sortParams.asc ? <ArrowUpward className="ml-2" /> : null}
+                            {sortParams.key == "packaging" && !sortParams.asc ? <ArrowDownward className="ml-2" /> : null}
+                        </div>
+                    </a>
+                    <a className="col-start-7 cursor-pointer" onClick={() => {
+                        handleSort("count", sortParams.key == "count" ? !sortParams.asc : true);
+                    }}>
+                        <div className="flex items-center">Qtty
+                            {sortParams.key == "count" && sortParams.asc ? <ArrowUpward className="ml-2" /> : null}
+                            {sortParams.key == "count" && !sortParams.asc ? <ArrowDownward className="ml-2" /> : null}
+                        </div>
+                    </a>
+                    <a className="col-start-8 cursor-pointer" onClick={() => {
+                        handleSort("place", sortParams.key == "place" ? !sortParams.asc : true);
+                    }}>
+                        <div className="flex items-center">Place
+                            {sortParams.key == "place" && sortParams.asc ? <ArrowUpward className="ml-2" /> : null}
+                            {sortParams.key == "place" && !sortParams.asc ? <ArrowDownward className="ml-2" /> : null}
+                        </div>
+                    </a>
+
                 </div>
 
                 {components.map(comp => (
                     <RowConponent
+                        exact={similar ? searchQuery.toUpperCase() : ""}
                         onDelete={async () => {
                             try {
                                 const res = await fetch("/api/part", {
@@ -201,10 +310,14 @@ export default function Home() {
                         comp={comp}
                         expanded={expandedRows.has(comp.id)}
                         setExpanded={setExpandedRowsF}
-                        update={fetchParts}
+                        update={(updatedComp: ElectronicComponent) => {
+                            fetchParts(searchQuery);
+                        }}
+                        q={searchQuery}
                     />
+
                 ))}
             </div>
-        </div>
+        </div >
     );
 }
