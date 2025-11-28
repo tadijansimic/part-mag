@@ -15,4 +15,26 @@ model electronicComponent {
   packaging   String?
   datasheet   String?
   place       String
+
+  projects ProjectComponent[]
 }
+model Project {
+  id        Int       @id @default(autoincrement())
+  naziv     String
+  openedAt  DateTime  @default(now())
+
+  components ProjectComponent[]
+}
+model ProjectComponent {
+  id          Int                 @id @default(autoincrement())
+
+  project     Project             @relation(fields: [projectId], references: [id])
+  projectId   Int
+
+  component   electronicComponent @relation(fields: [componentId], references: [id])
+  componentId Int
+
+  quantity    Int
+}
+
+
