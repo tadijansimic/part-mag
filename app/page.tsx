@@ -4,17 +4,21 @@ import React, { useState, useEffect, useRef } from "react";
 import RowConponent from "@/components/row-component";
 import ElectronicComponent from "../types/component-type";
 import ValidatedInput, { ValidatedInputRef } from "@/components/input-component";
-import { Button, Checkbox, FormControlLabel } from "@mui/material";
+import { Button, Checkbox, FormControlLabel, IconButton } from "@mui/material";
 import AddIcon from '@mui/icons-material/Add';
 import AddForm from "@/components/add-form";
 import ArrowUpward from '@mui/icons-material/ArrowUpward';
 import ArrowDownward from '@mui/icons-material/ArrowDownward';
+import { ArrowRight } from "@mui/icons-material";
+import { ArrowLeft } from "@mui/icons-material";
 
 
 interface sortI {
     key: keyof ElectronicComponent;
     asc: boolean;
 }
+
+const pageSizeC = 12;
 
 export default function Home() {
     const [components, setComponents] = useState<ElectronicComponent[]>([]);
@@ -25,18 +29,27 @@ export default function Home() {
     const [showAddForm, setShowAddForm] = useState(false);
     const [modalVisible, setModalVisible] = useState(false);
 
-    // Fetch parts from API
+    const [similar, setSimilar] = useState<boolean>(false);
+    const [sortParams, setSortParams] = useState<sortI>({
+        key: "mpn",
+        asc: true
+    })
+    const [currentPage, setCurrentPage] = useState<number>(1);
+    // Fetch parts from API 
 
-    const fetchParts = async (q?: string, sim: boolean = similar) => {
+    const fetchParts = async (q?: string, sim: boolean = similar, page: number = currentPage, pageSize: number = pageSizeC, key: keyof ElectronicComponent = sortParams.key, asc: boolean = sortParams.asc) => {
         if (!q) q = searchQuery;
-        const res = await fetch(`/api/part?query=${encodeURIComponent(q)}&similar=${sim}`);
+        const res = await fetch(`/api/part?query=${encodeURIComponent(q)}&similar=${sim}&page=${page}&pageSize=${pageSize}&key=${key}&asc=${asc}`);
         const json = await res.json();
         const parts: ElectronicComponent[] = Array.isArray(json.parts) ? json.parts : [];
-        handleSort(sortParams.key, sortParams.asc, parts);
+        setComponents(parts);
+        // handleSort(sortParams.key, sortParams.asc, parts);
     }
 
 
     useEffect(() => {
+        setCurrentPage(1);
+        // console.log("Fetch parts due to searchQuery/similar change:", searchQuery, similar);
         fetchParts(searchQuery, similar);
     }, [searchQuery]);
 
@@ -135,35 +148,31 @@ export default function Home() {
             closeAddForm();
         }
     };
-    const [similar, setSimilar] = useState<boolean>(false);
-    const [sortParams, setSortParams] = useState<sortI>({
-        key: "mpn",
-        asc: true
-    })
     const handleSort = (key: keyof ElectronicComponent, asc: boolean, list?: ElectronicComponent[]) => {
-        const source = list ?? components;
-
-        const matching = source.filter(c => c.mpn === searchQuery.toUpperCase());
-        const nonMatching = source.filter(c => c.mpn !== searchQuery.toUpperCase());
-
-        const sortedMatching = [...matching].sort((a, b) => {
-            const aVal = a[key] ?? "";
-            const bVal = b[key] ?? "";
-            if (typeof aVal === "number" && typeof bVal === "number") return asc ? aVal - bVal : bVal - aVal;
-            return asc ? aVal.toString().localeCompare(bVal.toString()) : bVal.toString().localeCompare(aVal.toString());
-        });
-
-        const sortedNonMatching = [...nonMatching].sort((a, b) => {
-            const aVal = a[key] ?? "";
-            const bVal = b[key] ?? "";
-            if (typeof aVal === "number" && typeof bVal === "number") return asc ? aVal - bVal : bVal - aVal;
-            return asc ? aVal.toString().localeCompare(bVal.toString()) : bVal.toString().localeCompare(aVal.toString());
-        });
-
-        const sorted = [...sortedMatching, ...sortedNonMatching];
-        setComponents(sorted);
-
         setSortParams({ key, asc });
+        fetchParts(searchQuery, similar, currentPage, pageSizeC, key, asc);
+        // const source = list ?? components;
+
+        // const matching = source.filter(c => c.mpn === searchQuery.toUpperCase());
+        // const nonMatching = source.filter(c => c.mpn !== searchQuery.toUpperCase());
+
+        // const sortedMatching = [...matching].sort((a, b) => {
+        //     const aVal = a[key] ?? "";
+        //     const bVal = b[key] ?? "";
+        //     if (typeof aVal === "number" && typeof bVal === "number") return asc ? aVal - bVal : bVal - aVal;
+        //     return asc ? aVal.toString().localeCompare(bVal.toString()) : bVal.toString().localeCompare(aVal.toString());
+        // });
+
+        // const sortedNonMatching = [...nonMatching].sort((a, b) => {
+        //     const aVal = a[key] ?? "";
+        //     const bVal = b[key] ?? "";
+        //     if (typeof aVal === "number" && typeof bVal === "number") return asc ? aVal - bVal : bVal - aVal;
+        //     return asc ? aVal.toString().localeCompare(bVal.toString()) : bVal.toString().localeCompare(aVal.toString());
+        // });
+
+        // const sorted = [...sortedMatching, ...sortedNonMatching];
+        // setComponents(sorted);
+
     };
 
 
@@ -195,11 +204,6 @@ export default function Home() {
             )}
 
 
-
-
-            <div className="mt-5 ml-5 text-3xl">Part Mag</div>
-            <hr className="mt-5 border-primary" />
-
             <form
                 className="flex flex-row m-auto mt-5 w-11/12 text-lg"
                 onSubmit={(e) => { e.preventDefault(); openAddForm(); }}
@@ -222,6 +226,7 @@ export default function Home() {
                         <Checkbox
                             checked={similar}
                             onChange={() => {
+                                setCurrentPage(1)
                                 fetchParts(searchQuery, !similar);
                                 setSimilar(!similar);
                             }}
@@ -317,6 +322,36 @@ export default function Home() {
                     />
 
                 ))}
+
+            </div>
+            <div className="flex justify-end items-center space-x-4 m-auto my-4 w-11/12 text-xl">
+                <IconButton
+                    disabled={currentPage === 1}
+                    onClick={() => {
+                        if (currentPage > 1) {
+                            const newPage = currentPage - 1;
+                            setCurrentPage(newPage);
+                            fetchParts(searchQuery, similar, newPage);
+                        }
+                    }}>
+                    <ArrowLeft
+                        sx={{ fontSize: 60 }}
+                        color="primary" />
+                </IconButton>
+                {currentPage}
+                <IconButton
+                    disabled={components.length < pageSizeC}
+                    onClick={() => {
+                        if (currentPage >= 1) {
+                            const newPage = currentPage + 1;
+                            setCurrentPage(newPage);
+                            fetchParts(searchQuery, similar, newPage);
+                        }
+                    }}>
+                    <ArrowRight
+                        sx={{ fontSize: 60 }}
+                        color="primary" />
+                </IconButton>
             </div>
         </div >
     );

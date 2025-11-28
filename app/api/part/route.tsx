@@ -6,6 +6,8 @@ import ElectronicComponent from '@/types/component-type';
 const prisma = new PrismaClient();
 
 import * as cheerio from "cheerio";
+import { skip } from 'node:test';
+import { all } from 'axios';
 
 export async function getTransistorSubstitutions(search: string): Promise<string[]> {
     if (!search) throw new Error("Missing search parameter");
@@ -65,11 +67,21 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const queries = url.searchParams.getAll("query").filter(q => q.trim() !== "");
     const similar = url.searchParams.get("similar") === "true";
+    const page = parseInt(url.searchParams.get("page") || "1", 10);
+    const pageSize = parseInt(url.searchParams.get("pageSize") || "10", 10);
+    const key = url.searchParams.get("key") as keyof ElectronicComponent || "mpn";
+    const asc = url.searchParams.get("asc") === "true";
 
     let parts: ElectronicComponent[] = [];
 
     if (queries.length === 0) {
-        parts = await prisma.electronicComponent.findMany() as ElectronicComponent[];
+        parts = await prisma.electronicComponent.findMany({
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+            orderBy: {
+                [key]: asc ? 'asc' : 'desc'
+            }
+        }) as ElectronicComponent[];
     } else if (similar) {
         try {
             const similarMpns = await getTransistorSubstitutions(queries[0]);
@@ -77,6 +89,11 @@ export async function GET(req: NextRequest) {
                 parts = await prisma.electronicComponent.findMany({
                     where: {
                         mpn: { in: similarMpns }
+                    },
+                    skip: (page - 1) * pageSize,
+                    take: pageSize,
+                    orderBy: {
+                        [key]: asc ? 'asc' : 'desc'
                     }
                 }) as ElectronicComponent[];
             }
@@ -86,7 +103,17 @@ export async function GET(req: NextRequest) {
         }
     } else {
         const allParts = await prisma.electronicComponent.findMany() as ElectronicComponent[];
+        allParts.sort((a, b) => {
+            const valA = a[key];
+            const valB = b[key];
 
+            if (typeof valA === "string" && typeof valB === "string") {
+                return asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            } else {
+                return asc ? Number(valA) - Number(valB) : Number(valB) - Number(valA);
+            }
+
+        });
         function normalize(str?: string) {
             return (str ?? "").toLowerCase().replace(/[^\w\s]/g, ""); // uklanja sve osim slova, brojeva i space
         }
@@ -101,11 +128,7 @@ export async function GET(req: NextRequest) {
                 normalize(part.packaging).includes(q) ||
                 normalize(part.place).includes(q)
             )
-        ).sort((a, b) => {
-            const getKey = (p: typeof allParts[0]) =>
-                normalize(p.mpn) || normalize(p.description) || normalize(p.packaging) || normalize(p.place);
-            return getKey(a).localeCompare(getKey(b));
-        });
+        ).splice((page - 1) * pageSize, pageSize);
 
 
 

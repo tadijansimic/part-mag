@@ -27,7 +27,8 @@ export default function RootLayout({
             <body
                 tabIndex={-1}
                 className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-            >
+            ><div className="mt-5 ml-5 text-3xl">Part Mag</div>
+                <hr className="mt-5 border-primary" />
                 {children}
             </body>
         </html>
